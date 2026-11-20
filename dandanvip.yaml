@@ -1,0 +1,41 @@
+name: "蛋蛋不语 VIP 解锁"
+description: "本地改写 App 后端返回的会员字段，显示 VIP 会员。需要把 38.76.202.248:8000 加进 Egern 设置 → HTTP Engine Hosts（默认只解析 80 端口）。"
+author: "杨思思"
+icon: "crown.fill"
+
+compat_arguments:
+  NICKNAME: "克里斯"
+  AVATAR_URL: "https://cdn.jsdelivr.net/gh/wukris1106/egern-dandanvip@main/avatar.jpg"
+  VIP_EXPIRE: "2099-09-19"
+
+compat_arguments_desc: |
+  NICKNAME=App 内显示的昵称
+  AVATAR_URL=头像地址（已指向本仓库 avatar.jpg）
+  VIP_EXPIRE=会员到期日（默认 2099-09-19）
+
+# 纯声明式改写：不加载外部 JS，因此不存在 script_url 拉取失败 / 缓存过期的问题
+body_rewrites:
+  - response_jq:
+      match: "^http://38\\.76\\.202\\.248:8000/rest/v1/profiles"
+      filter: >-
+        if type == "array" then
+          map(. + {vip_status: true, vip_level: 9, vip_expire_at: "{{{VIP_EXPIRE}}}", username: "{{{NICKNAME}}}", avatar_url: "{{{AVATAR_URL}}}"})
+        else
+          . + {vip_status: true, vip_level: 9, vip_expire_at: "{{{VIP_EXPIRE}}}", username: "{{{NICKNAME}}}", avatar_url: "{{{AVATAR_URL}}}"}
+        end
+
+  # Supabase 其它可能返回会员信息的表（按需扩展，命中不到不影响）
+  - response_jq:
+      match: "^http://38\\.76\\.202\\.248:8000/rest/v1/user_profiles"
+      filter: >-
+        if type == "array" then
+          map(. + {vip_status: true, vip_level: 9, vip_expire_at: "{{{VIP_EXPIRE}}}"})
+        else
+          . + {vip_status: true, vip_level: 9, vip_expire_at: "{{{VIP_EXPIRE}}}"}
+        end
+
+# 直连该 IP，避免被其它代理规则带走（明文 http，必须直连才进重写引擎）
+rules:
+  - ip_cidr:
+      match: 38.76.202.248/32
+      policy: DIRECT
